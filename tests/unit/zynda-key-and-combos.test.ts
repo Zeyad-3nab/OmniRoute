@@ -60,6 +60,7 @@ async function createZyndaKey(): Promise<{ id: string; key: string }> {
     catalogScope: "combos",
     allowAutoCombos: false,
     cacheDefaultMode: "bypass",
+    noLog: true,
     allowedEndpoints: ["chat", "models"],
   });
   return { id: created.id, key: created.key };
@@ -73,6 +74,7 @@ test("the zynda-prod profile persists every least-privilege field", async () => 
   assert.equal(meta.catalogScope, "combos");
   assert.equal(meta.allowAutoCombos, false);
   assert.equal(meta.cacheDefaultMode, "bypass");
+  assert.equal(meta.noLog, true);
   assert.deepEqual([...(meta.allowedEndpoints ?? [])].sort(), ["chat", "models"]);
   assert.deepEqual([...(meta.allowedCombos ?? [])].sort(), [...ZYNDA_COMBOS].sort());
 });

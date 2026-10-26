@@ -84,14 +84,9 @@ test("ANTHROPIC_PING_FRAME is a real Anthropic ping event (not a comment)", () =
   assert.doesNotMatch(decoded, /^:/, "must not be an SSE comment");
 });
 
-test("OPENAI_KEEPALIVE_FRAME is a JSON-parseable OpenAI streaming chunk", () => {
+test("OPENAI_KEEPALIVE_FRAME is an SSE comment", () => {
   const decoded = new TextDecoder().decode(OPENAI_KEEPALIVE_FRAME);
-  assert.match(decoded, /^data: /);
-  assert.doesNotMatch(decoded, /^:/, "must not be an SSE comment");
-
-  const payload = JSON.parse(decoded.slice("data: ".length).trim());
-  assert.equal(payload.object, "chat.completion.chunk");
-  assert.deepEqual(payload.choices, [{ index: 0, delta: {}, finish_reason: null }]);
+  assert.equal(decoded, ": keepalive\n\n");
 });
 
 test("slow handler emits the custom OpenAI keepalive chunk before the body", async () => {
@@ -106,20 +101,13 @@ test("slow handler emits the custom OpenAI keepalive chunk before the body", asy
   });
 
   const body = await readAll(result);
-  assert.doesNotMatch(body, /: keepalive\n/);
-  const firstFrame = body.split("\n\n")[0];
-  assert.doesNotThrow(() => JSON.parse(firstFrame.slice("data: ".length)));
+  assert.match(body, /: keepalive\n/);
   assert.match(body, /data: \[DONE\]/);
 });
 
-test("OPENAI_STARTUP_FRAME is a parseable empty delta", () => {
+test("OPENAI_STARTUP_FRAME is an SSE comment", () => {
   const decoded = new TextDecoder().decode(OPENAI_STARTUP_FRAME);
-  assert.match(decoded, /^data: /);
-  assert.doesNotMatch(decoded, /^:/, "must not be an SSE comment");
-
-  const payload = JSON.parse(decoded.slice("data: ".length).trim());
-  assert.equal(payload.object, "chat.completion.chunk");
-  assert.deepEqual(payload.choices, [{ index: 0, delta: {}, finish_reason: null }]);
+  assert.equal(decoded, ": keepalive\n\n");
 });
 
 test("slow handler emits startupFrame once, then falls back to keepaliveFrame on later ticks", async () => {
@@ -139,19 +127,14 @@ test("slow handler emits startupFrame once, then falls back to keepaliveFrame on
 
   const body = await readAll(result);
   const frames = body.split("\n\n").filter(Boolean);
-  const firstPayload = JSON.parse(frames[0].slice("data: ".length));
-  assert.deepEqual(firstPayload.choices[0].delta, {});
+  assert.equal(frames[0], ": keepalive");
 
   // At least one subsequent keepalive tick should have fired before the real
   // body arrived (interval 30ms, handler resolves at 150ms) — those ticks use
   // the lightweight keepaliveFrame, not a repeat of the startup text.
-  const laterKeepalives = frames
-    .slice(1, -1) // drop the startup frame and the final real "[DONE]" frame
-    .map((f) => JSON.parse(f.slice("data: ".length)));
+  const laterKeepalives = frames.slice(1, -1);
   assert.ok(laterKeepalives.length > 0, "expected at least one interval keepalive tick");
-  for (const tick of laterKeepalives) {
-    assert.deepEqual(tick.choices[0].delta, {}, "interval ticks stay the lightweight empty delta");
-  }
+  assert.ok(laterKeepalives.every((tick) => tick === ": keepalive"));
   assert.match(body, /data: \[DONE\]/);
 });
 
@@ -168,13 +151,7 @@ test("startupFrame defaults to keepaliveFrame when omitted (no behavior change)"
   });
 
   const body = await readAll(result);
-  const firstFrame = body.split("\n\n")[0];
-  const firstPayload = JSON.parse(firstFrame.slice("data: ".length));
-  assert.deepEqual(
-    firstPayload.choices[0].delta,
-    {},
-    "first frame falls back to the plain keepaliveFrame when no startupFrame is configured"
-  );
+  assert.equal(body.split("\n\n")[0], ": keepalive");
 });
 
 // Responses clients need both frequent raw bytes and occasional parsed events while
@@ -300,13 +277,9 @@ test("a correlationId records the chat startup frame and keepalive ticks", async
   await readAll(result);
 
   const recorded = takeEarlyKeepaliveBytes(correlationId).join("");
-  assert.match(
-    recorded,
-    /data: \{"id":"chatcmpl-keepalive","object":"chat\.completion\.chunk"/,
-    "startup frame must be recorded"
-  );
+  assert.match(recorded, /: keepalive/, "startup frame must be recorded");
   assert.equal(
-    (recorded.match(/chatcmpl-keepalive/g) || []).length >= 2,
+    (recorded.match(/: keepalive/g) || []).length >= 2,
     true,
     "startup frame plus at least one recurring keepalive tick must be recorded"
   );

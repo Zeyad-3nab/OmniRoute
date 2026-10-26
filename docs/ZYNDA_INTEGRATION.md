@@ -3,13 +3,13 @@
 Operator runbook for pointing Zynda (a server-to-server caller using Vercel-style
 catalog IDs) at an OmniRoute deployment, and for securing that deployment.
 
-This documents **verified behavior of the installed version (3.8.52)**. Most of the
-requested security posture is already implemented — the only source change this
-work added is an Agent Card URL fix (see §2.3). Everything else is configuration,
-a least-privilege API key, and per-model combos, all created through supported
-settings/admin APIs. Where a prerequisite could not be verified from source
-(e.g. whether a provider account is actually connected), it is called out rather
-than assumed.
+This documents **verified behavior of the installed version (3.8.52)** and the
+requested Zynda security posture. The branch includes the Agent Card URL fix
+(see §2.3), gateway hardening, and regression coverage for the behavior described
+in sections 5 and 6. Deployment settings, the least-privilege API key, and
+per-model combos must still be created through supported settings/admin APIs.
+Where a prerequisite could not be verified from source (for example, whether a
+provider account is actually connected), it is called out rather than assumed.
 
 ---
 
@@ -158,6 +158,7 @@ All field names below are the **verified** schema (`src/lib/db/apiKeys.ts`,
 | `catalogScope: "combos"`                                                 | `catalogScope`                                          | `"combos"`                                                                                                                                        |
 | `allowAutoCombos: false`                                                 | `allowAutoCombos`                                       | `false`                                                                                                                                           |
 | `cacheDefaultMode: "bypass"`                                             | `cacheDefaultMode`                                      | `"bypass"` (skips semantic cache lookup — `open-sse/handlers/chatCore/semanticCache.ts`)                                                          |
+| body logging disabled                                                    | `noLog`                                                 | `true` (prevents request/response bodies from being persisted for this key)                                                                       |
 | `allowedEndpoints: ["/v1/messages","/v1/chat/completions","/v1/models"]` | `allowedEndpoints` (stores **category IDs**, not paths) | `["chat","models"]` (`/v1/messages` + `/v1/chat/completions` → `chat`; `/v1/models` → `models`; see `src/shared/constants/endpointCategories.ts`) |
 | (approved combos)                                                        | `allowedCombos`                                         | the Zynda catalog IDs (see §4)                                                                                                                    |
 
@@ -190,6 +191,7 @@ curl -s -X PATCH "$BASE/api/keys/$KEY_ID" -H "Authorization: Bearer $ADMIN" \
     "catalogScope": "combos",
     "allowAutoCombos": false,
     "cacheDefaultMode": "bypass",
+    "noLog": true,
     "allowedEndpoints": ["chat","models"]
   }'
 ```
@@ -256,6 +258,22 @@ model/account.
 - Do **not** include `auto/*` or unauthenticated providers in Zynda's approved
   combos (the `zynda-prod` key sets `allowAutoCombos:false`).
 
+### 4.1 Blocked-provider setting
+
+`blockedProviders` is a **global database-backed setting**, not a per-key field.
+Set it through the supported settings/admin API when these local or anonymous
+providers must not be reachable:
+
+```json
+{ "blockedProviders": ["zcode", "cloudflare-playground", "opencode"] }
+```
+
+The values are provider IDs or their configured aliases (`zc`, `cfp`, `oc`).
+The `opencode` block also covers the existing `opencode-zen` and `opencode-go`
+sibling routes, so an old combo cannot bypass the block by naming a sibling ID.
+The gateway returns `503` with `provider_unavailable` for direct requests and
+skips blocked combo targets before upstream dispatch.
+
 **Unverified prerequisites — do NOT create blindly:** whether accounts for
 `zai`/GLM, `alibaba`/qwen, or the Claude Code (`cc/*`) target are actually
 connected cannot be determined from source. Before creating a production combo,
@@ -293,10 +311,11 @@ so change them only with that understood.
   Agent Card public URL must be confirmed on the live instance (§2.4).
 - Vercel fallback behavior (on the Zynda side) is out of this repo's scope and
   unverified.
-- Phases 6–12 of the original brief (pre-stream HTTP error commit, SSE keepalive
-  framing, error-type distinctions, session affinity, streaming usage, provider
-  blocking, cache/compression/logging/executor audit) were investigated but are
-  **not** part of this change set — several already behave as asked in 3.8.52
-  (e.g. `x-session-affinity` has an equivalent via `x-session-id`/`x-omniroute-session`
-  with `sessionAffinityTtlMs`; `blockedProviders` exists for no-auth providers).
-  Track them as follow-ups.
+- The gateway-side portions of the original phases are implemented and covered by
+  focused regression tests: pre-stream status preservation, comment-based OpenAI
+  keepalives, typed model/provider errors, `x-session-affinity`, streaming cache-write
+  accounting, and blocked-provider enforcement through combo preflight.
+- `waitForCooldown` and `comboCooldownWait` remain global-only settings; use per-combo
+  `maxGlobalAttempts` and `queueDepth` to scope fail-fast behavior to Zynda.
+- Vercel-side fallback remains unverified until an integration test proves the expected
+  failure is surfaced to Zynda.

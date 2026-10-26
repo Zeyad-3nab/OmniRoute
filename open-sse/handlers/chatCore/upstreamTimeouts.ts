@@ -8,6 +8,7 @@ import {
   getLoggedInputTokens,
   getLoggedOutputTokens,
   getReasoningTokens,
+  getPromptCacheCreationTokens,
 } from "@/lib/usage/tokenAccounting";
 import { MAX_PROVIDER_SPECIFIC_TIMEOUT_MS } from "@/shared/validation/providerSpecificData";
 
@@ -65,7 +66,17 @@ export function computeBillableTokens(usage: unknown): number {
   // getLoggedInputTokens (prompt_tokens / input_tokens). Adding them here would
   // double-count. Canonical billable total = input + output + reasoning, matching
   // the columns persisted by saveRequestUsage and seedWindowUsageFromHistory.
-  return getLoggedInputTokens(usage) + getLoggedOutputTokens(usage) + getReasoningTokens(usage);
+  const input = getLoggedInputTokens(usage);
+  const record = usage && typeof usage === "object" ? (usage as Record<string, unknown>) : null;
+  const cacheWrite = getPromptCacheCreationTokens(usage);
+  const inputIncludesCacheWrite =
+    record?.input_tokens !== undefined && record?.prompt_tokens === undefined;
+  return (
+    input +
+    (inputIncludesCacheWrite ? 0 : cacheWrite) +
+    getLoggedOutputTokens(usage) +
+    getReasoningTokens(usage)
+  );
 }
 
 /** Resolves the model-level `timeoutMs` registry override, when both

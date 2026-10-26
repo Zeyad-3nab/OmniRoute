@@ -200,6 +200,7 @@ export function extractSessionAffinityKey(
 ): string | null {
   const headerKey = normalizeSessionKey(
     readHeaderValue(headers, "x-codex-session-id") ??
+      readHeaderValue(headers, "x-session-affinity") ??
       readHeaderValue(headers, "x-session-id") ??
       readHeaderValue(headers, "x-omniroute-session"),
     "header"
