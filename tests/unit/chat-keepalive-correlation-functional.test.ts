@@ -112,13 +112,13 @@ test("route buffers its keepalive bytes under the caller's X-Correlation-Id", as
   // The slow path has committed: the wrapper has written its startup frame to the wire.
   const reader = res.body!.getReader();
   const first = await reader.read();
-  assert.match(new TextDecoder().decode(first.value), /chatcmpl-keepalive/);
+  assert.match(new TextDecoder().decode(first.value), /: keepalive/);
 
   // Only the route's `correlationId: reqId` makes the wrapper buffer what it wrote.
   const buffered = takeEarlyKeepaliveBytes(correlationId).join("");
   assert.match(
     buffered,
-    /chatcmpl-keepalive/,
+    /: keepalive/,
     "withEarlyStreamKeepalive must receive the request's correlation id from the route"
   );
 
@@ -145,7 +145,7 @@ test("slow streaming chat request persists keepalive bytes in the call-log row",
     if (done) break;
     wire += decoder.decode(value);
   }
-  assert.match(wire, /chatcmpl-keepalive/, "wire must carry the keepalive startup frame");
+  assert.match(wire, /: keepalive/, "wire must carry the keepalive startup frame");
   assert.match(wire, /chatcmpl-keepalive-func/, "wire must carry the upstream chunk");
 
   // The journal row is keyed on an internal traceId, not the caller correlation id:
@@ -169,7 +169,7 @@ test("slow streaming chat request persists keepalive bytes in the call-log row",
   const client = (payload.streamChunks?.client ?? []).join("");
   assert.match(
     client,
-    /chatcmpl-keepalive/,
+    /: keepalive/,
     "persisted streamChunks.client must contain the keepalive bytes written directly to the wire"
   );
 });

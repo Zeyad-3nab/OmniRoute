@@ -46,7 +46,7 @@ export function normalizeOrigin(origin: string): string {
   return parsed.origin.toLowerCase();
 }
 
-function configuredPublicOrigins(): PublicOriginCandidate[] {
+export function configuredPublicOrigins(): PublicOriginCandidate[] {
   const candidates: PublicOriginCandidate[] = [];
   for (const name of PUBLIC_BASE_URL_ENV) {
     const value = process.env[name]?.trim();

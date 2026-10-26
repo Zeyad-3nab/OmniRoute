@@ -4,6 +4,7 @@ type ProviderWithAlias = { alias?: string };
 type NoAuthProviderEntry = { id: string; alias?: string };
 
 const noAuthProviderEntries = Object.values(NOAUTH_PROVIDERS) as NoAuthProviderEntry[];
+const OPENCODE_PROVIDER_FAMILY = new Set(["opencode", "opencode-zen", "opencode-go"]);
 
 export function normalizeBlockedProviderSet(blockedProviders: unknown): Set<string> {
   const entries = blockedProviders instanceof Set ? Array.from(blockedProviders) : blockedProviders;
@@ -23,7 +24,11 @@ export function isProviderBlockedByIdOrAlias(
   const blockedProviderSet = normalizeBlockedProviderSet(blockedProviders);
   const provider = getProviderById(providerId) as ProviderWithAlias | undefined;
   const baseId = providerId.replace(/-search$/, "");
+  const blockedOpenCodeFamily =
+    OPENCODE_PROVIDER_FAMILY.has(providerId) &&
+    Array.from(blockedProviderSet).some((blocked) => OPENCODE_PROVIDER_FAMILY.has(blocked));
   return (
+    blockedOpenCodeFamily ||
     blockedProviderSet.has(providerId) ||
     blockedProviderSet.has(baseId) ||
     (typeof provider?.alias === "string" && blockedProviderSet.has(provider.alias))

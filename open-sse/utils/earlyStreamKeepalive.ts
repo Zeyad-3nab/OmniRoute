@@ -41,9 +41,7 @@ const KEEPALIVE_FRAME = ENCODER.encode(": keepalive\n\n");
 // Some OpenAI-compatible clients parse every non-empty SSE line as JSON and
 // reject legal SSE comments before their first provider chunk arrives.
 // id/model stay brand-neutral — these frames go to the client, not upstream.
-export const OPENAI_KEEPALIVE_FRAME = ENCODER.encode(
-  'data: {"id":"chatcmpl-keepalive","object":"chat.completion.chunk","created":0,"model":"keepalive","choices":[{"index":0,"delta":{},"finish_reason":null}]}\n\n'
-);
+export const OPENAI_KEEPALIVE_FRAME = ENCODER.encode(": keepalive\n\n");
 // The first slow-path frame must be a valid OpenAI chunk without creating
 // visible reasoning that clients persist into the conversation.
 export const OPENAI_STARTUP_FRAME = OPENAI_KEEPALIVE_FRAME;
